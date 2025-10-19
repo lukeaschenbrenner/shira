@@ -7,6 +7,7 @@ from pathlib import Path
 
 from yt_dlp import YoutubeDL
 from ytmusicapi import YTMusic
+from yt_dlp.utils import ExtractorError, DownloadError
 
 from .metadata import clean_title, get_year
 from .tagging import MV_SEPARATOR_VISUAL, Tags, get_cover
@@ -217,8 +218,13 @@ class Dl:
 
 		if self.cookies_location is not None:
 			ydl_opts["cookiefile"] = str(self.cookies_location)
-		with YoutubeDL(ydl_opts) as ydl:
-			ydl.download("music.youtube.com/watch?v=" + video_id)
+		try:
+			with YoutubeDL(ydl_opts) as ydl:
+				ydl.download("music.youtube.com/watch?v=" + video_id)
+		except (ExtractorError, DownloadError) as e:
+			ydl_opts["format"] = "140" # Fallback to known base format, all vids have this?
+			with YoutubeDL(ydl_opts) as ydl:
+				ydl.download("music.youtube.com/watch?v=" + video_id)
 
 	def download_souncloud(self, url, temp_location):
 		# opus is obviously a better format, however:
@@ -265,4 +271,5 @@ class Dl:
 		result = subprocess.run(cmd, capture_output=True, text=True, check=True)
 		codec_info = json.loads(result.stdout)
 		# Extract and return codec name
+
 		return codec_info["streams"][0]["codec_name"]
