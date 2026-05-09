@@ -49,7 +49,19 @@ class Dl:
 		self.dump_json = dump_json
 		self.tags: Tags | None = None 
 		self.soundcloud = False
-		self.default_ydl_opts = {"progress": True, "quiet": True, "no_warnings": True, "fixup": "never"}
+		#import os
+		#os.environ["SHIRADL_POT_SCRIPT"] = r"C:\Users\Luke\Projects\shiradl\bgutil-ytdlp-pot-provider\server\build\generate_once.js"
+		self.default_ydl_opts = {"progress": True, "quiet": False, "no_warnings": False, "fixup": "warn", "verbose": True, "js_runtimes": {"node": {}}, 
+								"extractor_args": {
+									"youtube": {
+										"player_client": ["web_music"],
+										#"player_skip": ["webpage", "configs"],
+									},
+									#"youtubepot-bgutilscript": {
+								#		"script_path": "%SHIRADL_POT_SCRIPT%"
+								#	},
+									}
+								}
 		self.use_playlist_name = use_playlist_name
 
 	def get_ydl_extract_info(self, url) -> dict:
@@ -225,17 +237,41 @@ class Dl:
 		)
 
 	def download(self, video_id, temp_location):
-		ydl_opts = {**self.default_ydl_opts, "format": self.itag, "outtmpl": str(temp_location)}
+		full_url = f"https://music.youtube.com/watch?v={video_id}"
+		
+		# 1. Broaden 'format' to any audio, but use 'format_sort' to pick your itag
+		ydl_opts = {
+			**self.default_ydl_opts,
+			"format": "bestaudio/best",  # The "Pool"
+			"format_sort": [
+				f"id:{self.itag}",      # Try your preferred itag first
+				"hasaud",               # Then any audio
+				"abr",                  # Then highest bitrate
+				"asr",                   # Then highest sample rate
+				"acodec"
+			],
+			"format_sort_force": True,
+			"outtmpl": str(temp_location),
+			"fixup": "detect_or_warn"   # 'never' is likely causing DASH failures
+		}
 
-		if self.cookies_location is not None:
+		if self.cookies_location:
 			ydl_opts["cookiefile"] = str(self.cookies_location)
+
 		try:
 			with YoutubeDL(ydl_opts) as ydl:
-				ydl.download("music.youtube.com/watch?v=" + video_id)
+				# Note the list format [url]
+				ydl.download([full_url])
 		except (ExtractorError, DownloadError) as e:
-			ydl_opts["format"] = "140" # Fallback to known base format, all vids have this?
-			with YoutubeDL(ydl_opts) as ydl:
-				ydl.download("music.youtube.com/watch?v=" + video_id)
+			# 2. EMERGENCY FALLBACK
+			# If the preferred itag AND the sort fail, go totally generic
+			fallback_opts = {
+				**ydl_opts,
+				"format": "ba/ba*",
+				"format_sort": ["abr", "asr"], # Purely quality-based
+			}
+			with YoutubeDL(fallback_opts) as ydl:
+				ydl.download([full_url])
 
 	def download_souncloud(self, url, temp_location):
 		# opus is obviously a better format, however:

@@ -12,6 +12,7 @@ dependencies = [
 	"pillow",
 	"requests_cache",
 	"python-dateutil",
+	"bgutil-ytdlp-pot-provider"
 ]
 readme = "README.md"
 
